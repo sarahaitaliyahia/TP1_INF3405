@@ -1,30 +1,57 @@
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
+import java.util.HashMap;
 
-public class ClientHandler extends Thread { //pour traiter la demande de chaque client sur un socket particulier
-    private Socket socket; private int clientNumber; public ClientHandler(Socket socket, int clientNumber) {
+public class ClientHandler extends Thread {
+    private Socket socket;
+    private int clientNumber;
+    private static final HashMap<String, String> users = new HashMap<>();
+
+    static {
+        // Utilisateurs et mots de passe stockés en dur
+        users.put("user1", "password1");
+        users.put("user2", "password2");
+    }
+
+    public ClientHandler(Socket socket, int clientNumber) {
         this.socket = socket;
-        this.clientNumber = clientNumber; System.out.println("New connection with client#" + clientNumber + " at" + socket);}
-    public void run() { //Création de thread qui envoi un message à un client
-        try {
-            try {
-                DataOutputStream out = new DataOutputStream(socket.getOutputStream()); //création de canal d’envoi
-                out.writeUTF("Hello from server - you are client #" + clientNumber); //envoi de message
-            }
-            catch (IOException e) {
-                System.out.println("Error handling client# " + clientNumber + ": " + e);
-                throw new RuntimeException(e);
-            }
+        this.clientNumber = clientNumber;
+        System.out.println("New connection with client#" + clientNumber + " at " + socket);
+    }
 
-        }
-        finally {
+    public void run() {
+        try (
+                DataInputStream in = new DataInputStream(socket.getInputStream());
+                DataOutputStream out = new DataOutputStream(socket.getOutputStream())
+        ) {
+            out.writeUTF("Veuillez entrer votre nom d'utilisateur :");
+            String username = in.readUTF();
+
+            out.writeUTF("Veuillez entrer votre mot de passe :");
+            String password = in.readUTF();
+
+            if (authenticate(username, password)) {
+                out.writeUTF("Authentification réussie. Bienvenue, " + username + "!");
+                System.out.println("Client#" + clientNumber + " authentifié en tant que " + username);
+            } else {
+                out.writeUTF("Échec de l'authentification. Connexion refusée.");
+                System.out.println("Client#" + clientNumber + " a échoué l'authentification.");
+                socket.close();
+                return;
+            }
+        } catch (IOException e) {
+            System.out.println("Error handling client# " + clientNumber + ": " + e);  //messages erreurs en francais ?
+        } finally {
             try {
                 socket.close();
+            } catch (IOException e) {
+                System.out.println("Couldn't close a socket");  //messages erreurs en francais ?
             }
-            catch (IOException e) {
-                System.out.println("Couldn't close a socket, what's going on?");}
-            System.out.println("Connection with client# " + clientNumber+ " closed");
-            }
+            System.out.println("Connection with client# " + clientNumber + " closed"); //messages erreurs en francais ?
         }
+    }
+
+    private boolean authenticate(String username, String password) {
+        return users.containsKey(username) && users.get(username).equals(password);
+    }
 }
