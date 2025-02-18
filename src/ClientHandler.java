@@ -11,6 +11,14 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
     private int clientNumber;
     static DataInputStream in;
     static DataOutputStream out;
+    private static final List<ClientHandler> clients = new ArrayList<>();
+    private static final HashMap<String, String> users = new HashMap<>();
+
+    static {
+        // Utilisateurs et mots de passe stockés en dur
+        users.put("user1", "password1");
+        users.put("user2", "password2");
+    }
 
     public ClientHandler(Socket socket, int clientNumber) {
         this.socket = socket;
@@ -22,7 +30,32 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
         try {
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream()); //création de canal d’envoi
-            out.writeUTF("Hello from server - you are client #" + clientNumber); //envoi de message
+            clients.add(this);
+
+//            out.writeUTF("Veuillez entrer votre nom d'utilisateur :");
+//            String username = in.readUTF();
+//
+//            out.writeUTF("Veuillez entrer votre mot de passe :");
+//            String password = in.readUTF();
+//
+//            if (authenticate(username, password)) {
+//                out.writeUTF("Authentification réussie. Bienvenue, " + username + "!");
+//                System.out.println("Client#" + clientNumber + " authentifié en tant que " + username);
+//            } else {
+//                out.writeUTF("Échec de l'authentification. Connexion refusée.");
+//                System.out.println("Client#" + clientNumber + " a échoué l'authentification.");
+//                socket.close();
+//                return;
+//            }
+
+            this.displayMessageHistory();
+
+            String message;
+            while((message = in.readUTF()) != null) {
+                String formattedMessage = this.formatMessage(message);
+                this.saveSentMessage(formattedMessage);
+                this.broadcastMessage(formattedMessage);
+            }
         }
         catch (IOException e) {
             System.out.println("Error handling client # " + clientNumber + ": " + e);
@@ -43,6 +76,7 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
 //        }
 
         finally {
+            clients.remove(this);
             try {
                 socket.close();
             }
@@ -52,15 +86,38 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
             }
     }
 
+    private boolean authenticate(String username, String password) {
+        return users.containsKey(username) && users.get(username).equals(password);
+    }
 
     private String formatMessage(String rawMessage) {
         String user = String.format("%s:%d", socket.getInetAddress().getHostName(), socket.getPort());
-        String time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-
-        return String.format("[%s - %s - %s] : %s", user, time, rawMessage, rawMessage);
+        String time = new SimpleDateFormat("yyyy-MM-dd'@'HH:mm:ss").format(new Date());
+        return String.format("[%s - %s]: %s", user, time, rawMessage);
     }
 
-    private static void displayMessageHistory() throws IOException {
+    private void broadcastMessage(String message) {
+        for (ClientHandler client : clients) {
+            try {
+                client.out.writeUTF(message);
+            } catch (IOException e) {
+                System.out.println("Erreur dans l'envoi du message");
+            }
+        }
+
+    }
+
+    private void saveSentMessage(String message) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(HISTORY_TXT, true))) {
+            bw.write(message);
+            bw.newLine();
+            bw.flush();
+        } catch (IOException e) {
+            System.out.println("Error saving message: " + e.getMessage());
+        }
+    }
+
+    private void displayMessageHistory() throws IOException {
         List<String> lastMessages = new ArrayList<>();
 
         try (BufferedReader br = new BufferedReader(new FileReader(HISTORY_TXT))) {
@@ -77,15 +134,6 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
 
         for (String message : recentMessages) {
             out.writeUTF(message);
-        }
-    }
-
-    private void saveSentMessage(String message) {
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(HISTORY_TXT, true))) {
-            bw.write(message);
-            bw.newLine();
-        } catch (IOException e) {
-            System.out.println("Error saving message: " + e.getMessage());
         }
     }
 

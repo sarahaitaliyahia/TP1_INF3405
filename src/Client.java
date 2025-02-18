@@ -22,20 +22,30 @@ public class Client {
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
 
-            String helloMessageFromServer = in.readUTF();
-            System.out.println(helloMessageFromServer);
+//            System.out.print(in.readUTF());
+//            String username = scanner.nextLine();
+//            out.writeUTF(username);
+//
+//            System.out.print(in.readUTF());
+//            String password = scanner.nextLine();
+//            out.writeUTF(password);
+//
+//            System.out.println(in.readUTF());
+//            String helloMessageFromServer = in.readUTF();
+//            System.out.println(helloMessageFromServer);
 
-//            new Thread(() -> {
-//                try {
-//                    String receivedMessageFromServer;
-//                    while ((receivedMessageFromServer = in.readUTF()) != null) {
-//                        System.out.println(receivedMessageFromServer);
-//                    }
-//                } catch (IOException e) {
-//                    System.out.println("Server connection lost.");
-//                }
-//            }).start();
-//            sendMessage();
+
+            new Thread(() -> {
+                try {
+                    String receivedMessageFromServer;
+                    while ((receivedMessageFromServer = in.readUTF()) != null) {
+                        System.out.println(receivedMessageFromServer);
+                    }
+                } catch (IOException e) {
+                    System.out.println("Server connection lost.");
+                }
+            }).start();
+            sendMessage();
 
         }
         catch (Exception e) {
@@ -50,9 +60,14 @@ public class Client {
 
     private static void sendMessage() throws IOException {
         while (true) {
-            String newMessage = scanner.nextLine();
+            String newMessage = scanner.nextLine().trim();
+
+            if (newMessage.isEmpty()) {
+                continue;
+            }
             if (newMessage.length() > 200) {
                 System.out.println("Le message est trop long, veuillez respecter la limite de 200 caractères.");
+                continue;
             }
             out.writeUTF(newMessage);
         }

@@ -1,8 +1,6 @@
-import java.io.IOException;
 import java.util.*;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
+import java.net.*;
+import java.io.*;
 
 public class Serveur {
     private static String ipAddress;
@@ -18,7 +16,8 @@ public class Serveur {
 
         try {
             while (true) {
-                new ClientHandler(listener.accept(), clientNumber++).start();
+                Socket clientSocket = listener.accept();
+                new ClientHandler(clientSocket, clientNumber++).start();
             }
         } finally {
             listener.close();
@@ -81,4 +80,5 @@ public class Serveur {
     private static boolean verifyPort(int port) {
         return port >= 5000 && port <= 5050;
     }
+
 }
