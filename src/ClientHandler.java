@@ -15,9 +15,24 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
     private static final HashMap<String, String> users = new HashMap<>();
 
     static {
-        // Utilisateurs et mots de passe stockés en dur
-        users.put("user1", "password1");
-        users.put("user2", "password2");
+        loadUsers();
+    }
+
+    private static void loadUsers() {
+        File file = new File("accounts.txt");
+        if (!file.exists()) return; // No accounts file exists yet
+
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(":");
+                if (parts.length == 2) {
+                    users.put(parts[0], parts[1]); // Load username and password
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Error loading users: " + e.getMessage());
+        }
     }
 
     public ClientHandler(Socket socket, int clientNumber) {
@@ -32,59 +47,59 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
             out = new DataOutputStream(socket.getOutputStream()); //création de canal d’envoi
             clients.add(this);
 
-//            out.writeUTF("Veuillez entrer votre nom d'utilisateur :");
-//            String username = in.readUTF();
-//
-//            out.writeUTF("Veuillez entrer votre mot de passe :");
-//            String password = in.readUTF();
-//
-//            if (authenticate(username, password)) {
-//                out.writeUTF("Authentification réussie. Bienvenue, " + username + "!");
-//                System.out.println("Client#" + clientNumber + " authentifié en tant que " + username);
-//            } else {
-//                out.writeUTF("Échec de l'authentification. Connexion refusée.");
-//                System.out.println("Client#" + clientNumber + " a échoué l'authentification.");
-//                socket.close();
-//                return;
-//            }
+            out.writeUTF("Veuillez entrer votre nom d'utilisateur :");
+            String username = in.readUTF().trim();
+
+            out.writeUTF("Veuillez entrer votre mot de passe :");
+            String password = in.readUTF().trim();
+
+            if (username.isEmpty() || password.isEmpty()) {
+                out.writeUTF("Nom d'utilisateur et mot de passe ne doivent pas être vides.");
+                socket.close();
+                return;
+            }
+
+            synchronized (users) { // Ensure thread safety
+                if (users.containsKey(username)) {
+                    if (!users.get(username).equals(password)) {
+                        out.writeUTF("Erreur dans la saisie du mot de passe.");
+                        System.out.println("Client#" + clientNumber + " a échoué l'authentification.");
+                        socket.close();
+                        return;
+                    } else {
+                        out.writeUTF("Authentification réussie. Bienvenue, " + username + "!");
+                        System.out.println("Client#" + clientNumber + " authentifié en tant que " + username);
+                    }
+                } else {
+                    // **New Account Creation + Save to File**
+                    users.put(username, password);
+                    saveNewUser(username, password); // Save to accounts.txt
+                    out.writeUTF("Compte créé et authentification réussie. Bienvenue, " + username + "!");
+                    System.out.println("Nouveau compte créé pour " + username + " par client#" + clientNumber);
+                }
+            }
+
 
             this.displayMessageHistory();
 
             String message;
-            while((message = in.readUTF()) != null) {
+            while ((message = in.readUTF()) != null) {
                 String formattedMessage = this.formatMessage(message);
                 this.saveSentMessage(formattedMessage);
                 this.broadcastMessage(formattedMessage);
             }
+    } catch(IOException e) {
+        System.out.println("Erreur lors de la gestion du client #" + clientNumber + " : " + e);
+    } finally {
+        clients.remove(this);
+        try {
+            socket.close();
+        } catch (IOException e) {
+            System.out.println("Impossible de fermer le socket du client #" + clientNumber);
         }
-        catch (IOException e) {
-            System.out.println("Error handling client # " + clientNumber + ": " + e);
-            throw new RuntimeException(e);
-        }
-
-//        try{
-//              clientAuthentification();
-
-//              out.writeUTF("Utilisez la commande Ctrl+C pour quitter la conversation et vous déconnecter.");
-//              out.writeUTF("Veuillez respecter la limite de 200 caractères par message envoyé.");
-
-//              displayMessageHistory();
-//              broadcastMessage();
-//              saveSentMessage();
-//        }
-//        catch (Exception e) {
-//        }
-
-        finally {
-            clients.remove(this);
-            try {
-                socket.close();
-            }
-            catch (IOException e) {
-                System.out.println("Couldn't close a socket, what's going on?");}
-                System.out.println("Connection with client #" + clientNumber + " closed");
-            }
+        System.out.println("Connexion avec le client #" + clientNumber + " fermée.");
     }
+}
 
     private boolean authenticate(String username, String password) {
         return users.containsKey(username) && users.get(username).equals(password);
@@ -134,6 +149,15 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
 
         for (String message : recentMessages) {
             out.writeUTF(message);
+        }
+    }
+    private static void saveNewUser(String username, String password) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter("accounts.txt", true))) {
+            bw.write(username + ":" + password);
+            bw.newLine();
+            bw.flush();
+        } catch (IOException e) {
+            System.out.println("Erreur lors de l'enregistrement du nouvel utilisateur: " + e.getMessage());
         }
     }
 
