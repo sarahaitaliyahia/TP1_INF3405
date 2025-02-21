@@ -2,131 +2,97 @@ import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
 
-// Application client
 public class Client {
+    private static final Scanner scanner = new Scanner(System.in);
     private static Socket socket;
-    static String ipAddress;
-    static int port;
-    static Scanner scanner = new Scanner(System.in);
-    static DataInputStream in;
-    static DataOutputStream out;
+    private static DataInputStream in;
+    private static DataOutputStream out;
+    private static volatile boolean userIsConnected = true;
 
-
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         try {
-            ipAddress = configureIpAddress();
-            port = configurePort();
+            String ipAddress = NetworkValidation.configureIpAddress();
+            int port = NetworkValidation.configurePort();
             socket = new Socket(ipAddress, port);
             System.out.format("Connecté au serveur [%s:%d]%n", ipAddress, port);
 
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
 
-            System.out.print(in.readUTF());
-            String username = scanner.nextLine();
-            out.writeUTF(username);
+            authenticateUser();
 
-            System.out.print(in.readUTF());
-            String password = scanner.nextLine();
-            out.writeUTF(password);
+            listeningThread();
+            sendingMessages();
 
-            String response = in.readUTF();
-            System.out.println(response);
-            if (!response.toLowerCase().contains("authentification réussie")) {
-                System.out.println("Connexion refusée.");
-                socket.close();
-                scanner.close();
-                return;
-            }
-
-
-            new Thread(() -> {
-                try {
-                    String receivedMessage;
-                    while (true) {
-                        try {
-                            receivedMessage = in.readUTF();
-                            System.out.println(receivedMessage);
-                        } catch (IOException e) {
-                            System.out.println("Server connection lost.");
-                            break;
-                        }
-                    }
-                } catch (Exception e) {
-                    System.out.println("Server connection lost.");
-                }
-            }).start();
-
-            sendMessage();
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-        finally {
-            try {
-                socket.close();
-                scanner.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        } catch (IOException e) {
+            System.out.println("Erreur : " + e.getMessage());
+        } finally {
+            closeResources();
         }
     }
 
-    private static void sendMessage() throws IOException {
-        while (true) {
-            String newMessage = scanner.nextLine().trim();
+    private static void authenticateUser() throws IOException {
+        System.out.print(in.readUTF());
+        String username = scanner.nextLine();
+        out.writeUTF(username);
 
-            if (newMessage.isEmpty()) {
-                continue;
+        System.out.print(in.readUTF());
+        String password = scanner.nextLine();
+        out.writeUTF(password);
+
+        String response = in.readUTF();
+        System.out.println(response);
+
+        if (!response.toLowerCase().contains("authentification réussie")) {
+            System.out.println("Connexion refusée, veuillez relancer pour réessayer.");
+            userIsConnected = false;
+            closeResources();
+        }
+    }
+
+    private static void listeningThread() {
+        new Thread(() -> {
+            try {
+                while (userIsConnected) {
+                    String receivedMessage = in.readUTF();
+                    System.out.println(receivedMessage);
+                }
+            } catch (IOException e) {
+                System.out.println("Connexion avec le serveur perdue.");
+                userIsConnected = false;
+                closeResources();
             }
-            if (newMessage.length() > 200) {
+        }).start();
+    }
+
+    private static void sendingMessages() throws IOException {
+        while (userIsConnected) {
+            String message = scanner.nextLine().trim();
+            if (message.isEmpty()) continue;
+
+            if (message.length() > 200) {
                 System.out.println("Le message est trop long, veuillez respecter la limite de 200 caractères.");
                 continue;
             }
-            out.writeUTF(newMessage);
-        }
-    }
-
-    private static String configureIpAddress() {
-        System.out.println("Veuillez entrer une adresse IP valide (exemple du format requis : 192.168.1.1) : ");
-        ipAddress = scanner.nextLine();
-        while (!verifyIpAddress(ipAddress)) {
-            System.out.println("L'adresse IP entrée n'est pas valide, veuillez réessayer (exemple du format requis : 192.168.1.1) : ");
-            ipAddress = scanner.nextLine();
-        };
-        return ipAddress;
-    }
-
-    private static boolean verifyIpAddress (String ipAddress){
-            if (ipAddress.isEmpty()) return false;
-
-            String[] parts = ipAddress.split("\\.");
-            if (parts.length != 4) return false;
 
             try {
-                for (String part : parts) {
-                    int i = Integer.parseInt(part);
-                    if ((i < 0) || (i > 255)) return false;
-                }
-            } catch (Exception e) {
-                return !ipAddress.endsWith(".");
+                out.writeUTF(message);
+            } catch (IOException e) {
+                System.out.println("Impossible d'envoyer le message. Connexion perdue.");
+                userIsConnected = false;
+                closeResources();
+                break;
             }
-
-            return true;
         }
-
-    private static int configurePort() {
-        System.out.println("Veuillez entrer un port d'écoute compris entre 5000 et 5050 : ");
-        port = scanner.nextInt();
-        while (!verifyPort(port)) {
-            System.out.println("Le port entré n'est pas valide, veuillez réessayer (entre 5000 et 5050) : ");
-            port = scanner.nextInt();
-        };
-        scanner.nextLine();
-        return port;
     }
 
-    private static boolean verifyPort ( int port){
-            return port >= 5000 && port <= 5050;
+    private static void closeResources() {
+        try {
+            if (socket != null) socket.close();
+            if (in != null) in.close();
+            if (out != null) out.close();
+        } catch (IOException e) {
+            System.out.println("Erreur lors de la fermeture des ressources.");
         }
+    }
 }
