@@ -32,16 +32,12 @@ public class Client {
 
             String response = in.readUTF();
             System.out.println(response);
-            if (!response.contains("authentification réussie")) {
+            if (!response.toLowerCase().contains("authentification réussie")) {
                 System.out.println("Connexion refusée.");
                 socket.close();
                 scanner.close();
                 return;
             }
-
-//            System.out.println(in.readUTF());
-//            String helloMessageFromServer = in.readUTF();
-//            System.out.println(helloMessageFromServer);
 
 
             new Thread(() -> {
