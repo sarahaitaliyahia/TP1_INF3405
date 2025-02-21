@@ -1,84 +1,101 @@
-import java.util.*;
-import java.net.*;
 import java.io.*;
+import java.net.*;
+import java.util.*;
 
 public class Serveur {
-    private static String ipAddress;
-    private static int port;
+    private static final int port = 5020;
     private static ServerSocket listener;
-    private static Scanner scanner = new Scanner(System.in);
+    private static final List<ClientHandler> clients = new ArrayList<>();
+    private static final Map<String, String> users = new HashMap<>();  // Utilisateurs et mots de passe
 
-    public static void main(String[] args) throws Exception {
-        int clientNumber = 0;
+    public static void main(String[] args) throws IOException {
+        // Ajouter des utilisateurs avec leurs mots de passe
+        users.put("user1", "password1");
+        users.put("user2", "password2");
 
-        configureServer();
-        establishConnection();
+        listener = new ServerSocket(port);
+        System.out.println("Serveur démarré sur le port " + port);
 
-        try {
-            while (true) {
-                Socket clientSocket = listener.accept();
-                new ClientHandler(clientSocket, clientNumber++).start();
+        while (true) {
+            Socket clientSocket = listener.accept();  // Le serveur accepte une nouvelle connexion client
+            new ClientHandler(clientSocket).start();  // Crée un thread pour chaque client
+        }
+    }
+
+    private static class ClientHandler extends Thread {
+        private Socket socket;
+        private DataInputStream in;
+        private DataOutputStream out;
+        private String clientName;
+
+        public ClientHandler(Socket socket) {
+            this.socket = socket;
+        }
+
+        public void run() {
+            try {
+                in = new DataInputStream(socket.getInputStream());
+                out = new DataOutputStream(socket.getOutputStream());
+
+                // Authentification du client
+                authenticate();
+
+                // Ajouter ce client à la liste des clients connectés
+                synchronized (clients) {
+                    clients.add(this);
+                }
+
+                // Recevoir et diffuser les messages à tous les autres clients
+                String message;
+                while ((message = in.readUTF()) != null) {
+                    System.out.println("Message reçu: " + message);
+                    broadcastMessage(message);  // Diffuser le message à tous les clients
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                // Nettoyage et déconnexion du client
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                synchronized (clients) {
+                    clients.remove(this);
+                }
+                System.out.println(clientName + " s'est déconnecté.");
             }
-        } finally {
-            listener.close();
         }
-    }
 
-    private static void establishConnection() throws IOException {
-        listener = new ServerSocket();
-        listener.setReuseAddress(true);
-        InetAddress serverIP = InetAddress.getByName(ipAddress);
-        listener.bind(new InetSocketAddress(serverIP, port));
-        System.out.format("The server is running on %s:%d%n", ipAddress, port);
-    }
+        // Méthode pour authentifier un client
+        private void authenticate() throws IOException {
+            out.writeUTF("Veuillez entrer votre nom d'utilisateur : ");
+            clientName = in.readUTF();
 
-    private static void configureServer() {
-        configureIpAdress();
-        configurePort();
-    }
+            out.writeUTF("Veuillez entrer votre mot de passe : ");
+            String password = in.readUTF();
 
-    private static void configureIpAdress() {
-        System.out.println("Veuillez entrer une adresse IP valide (exemple du format requis : 192.168.1.1) : ");
-        ipAddress = scanner.nextLine();
-
-        while(!verifyIpAddress(ipAddress)){
-            System.out.println("L'adresse IP entrée n'est pas valide, veuillez réessayer (exemple du format requis : 192.168.1.1) : ");
-            ipAddress = scanner.nextLine();
-        };
-    }
-
-    private static boolean verifyIpAddress(String ipAddress) {
-        if (ipAddress.isEmpty()) return false;
-
-        String[] parts = ipAddress.split( "\\." );
-        if ( parts.length != 4 )  return false;
-
-        try {
-            for (String part : parts) {
-                int i = Integer.parseInt(part);
-                if ((i < 0) || (i > 255))
-                    return false;
+            if (users.containsKey(clientName) && users.get(clientName).equals(password)) {
+                out.writeUTF("Authentification réussie ! Bienvenue, " + clientName);
+            } else {
+                out.writeUTF("Authentification échouée. Connexion fermée.");
+                socket.close();
+                return;
             }
         }
-        catch (Exception e) {
-            return !ipAddress.endsWith(".");
+
+        // Diffuser le message à tous les clients
+        private void broadcastMessage(String message) {
+            synchronized (clients) {
+                for (ClientHandler client : clients) {
+                    try {
+                        client.out.writeUTF(message);  // Envoie le message à chaque client
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
         }
-
-        return true;
     }
-
-    private static void configurePort() {
-        System.out.println("Veuillez entrer un port d'écoute compris entre 5000 et 5050 : ");
-        port = scanner.nextInt();
-
-        while(!verifyPort(port)){
-            System.out.println("Le port entré n'est pas valide, veuillez réessayer (entre 5000 et 5050) : ");
-            port = scanner.nextInt();
-        };
-    }
-
-    private static boolean verifyPort(int port) {
-        return port >= 5000 && port <= 5050;
-    }
-
 }
