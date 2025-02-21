@@ -1,62 +1,173 @@
 import java.io.*;
-import java.net.*;
+import java.net.Socket;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
-public class ClientHandler extends Thread {
+
+public class ClientHandler extends Thread { //pour traiter la demande de chaque client sur un socket particulier
+    private static final int MAX_HISTORY_MESSAGES = 15;
+    private static String HISTORY_TXT = "history.txt";
     private Socket socket;
-    private DataInputStream in;
-    private DataOutputStream out;
-    private String clientName;
+    private int clientNumber;
+     DataInputStream in;
+     DataOutputStream out;
+    private static final List<ClientHandler> clients = new ArrayList<>();
+    private static final HashMap<String, String> users = new HashMap<>();
 
-    public ClientHandler(Socket socket) {
-        this.socket = socket;
+    static {
+        loadUsers();
     }
 
-    @Override
+    private static void loadUsers() {
+        File file = new File("accounts.txt");
+        if (!file.exists()) return; // No accounts file exists yet
+
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(":");
+                if (parts.length == 2) {
+                    users.put(parts[0], parts[1]); // Load username and password
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Error loading users: " + e.getMessage());
+        }
+    }
+
+    public ClientHandler(Socket socket, int clientNumber) {
+        this.socket = socket;
+        this.clientNumber = clientNumber;
+        addClient(this);
+
+        System.out.println("New connection with client #" + clientNumber + " at " + socket);
+    }
+
     public void run() {
         try {
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
 
-            // Authentification
-            authenticate();
+            out.writeUTF("Veuillez entrer votre nom d'utilisateur :");
+            String username = in.readUTF().trim();
 
-            // Recevoir et envoyer des messages
+            out.writeUTF("Veuillez entrer votre mot de passe :");
+            String password = in.readUTF().trim();
+
+            if (username.isEmpty() || password.isEmpty()) {
+                out.writeUTF("Nom d'utilisateur et mot de passe ne doivent pas être vides.");
+                socket.close();
+                return;
+            }
+
+            synchronized (users) { // Ensure thread safety
+                if (users.containsKey(username)) {
+                    if (!users.get(username).equals(password)) {
+                        out.writeUTF("Erreur dans la saisie du mot de passe.");
+                        System.out.println("Client#" + clientNumber + " a échoué l'authentification.");
+                        socket.close();
+                        return;
+                    } else {
+                        out.writeUTF("Authentification réussie. Bienvenue, " + username + "!");
+                        System.out.println("Client#" + clientNumber + " authentifié en tant que " + username);
+                    }
+                } else {
+                    // **New Account Creation + Save to File**
+                    users.put(username, password);
+                    saveNewUser(username, password); // Save to accounts.txt
+                    out.writeUTF("Compte créé et authentification réussie. Bienvenue, " + username + "!");
+                    System.out.println("Nouveau compte créé pour " + username + " par client#" + clientNumber);
+                }
+            }
+
+            this.displayMessageHistory();
+
             String message;
             while ((message = in.readUTF()) != null) {
-                System.out.println(clientName + ": " + message);
-                broadcastMessage(message);  // Diffuser à tous les autres clients
+                String formattedMessage = this.formatMessage(message);
+                this.saveSentMessage(formattedMessage);
+                this.broadcastMessage(formattedMessage);
             }
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                socket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    // Méthode pour authentifier un client
-    private void authenticate() throws IOException {
-        out.writeUTF("Veuillez entrer votre nom d'utilisateur : ");
-        clientName = in.readUTF();
-
-        out.writeUTF("Veuillez entrer votre mot de passe : ");
-        String password = in.readUTF();
-
-        if ("password1".equals(password)) {  // Supposons que le mot de passe soit hardcodé
-            out.writeUTF("Authentification réussie ! Bienvenue, " + clientName);
-        } else {
-            out.writeUTF("Authentification échouée.");
+    } catch(IOException e) {
+        System.out.println("Erreur lors de la gestion du client #" + clientNumber + " : " + e);
+    } finally {
+        removeClient(this);
+        try {
             socket.close();
+        } catch (IOException e) {
+            System.out.println("Impossible de fermer le socket du client #" + clientNumber);
+        }
+        System.out.println("Connexion avec le client #" + clientNumber + " fermée.");
+    }
+}
+
+    private boolean authenticate(String username, String password) {
+        return users.containsKey(username) && users.get(username).equals(password);
+    }
+
+    private String formatMessage(String rawMessage) {
+        String user = String.format("%s:%d", socket.getInetAddress().getHostName(), socket.getPort());
+        String time = new SimpleDateFormat("yyyy-MM-dd'@'HH:mm:ss").format(new Date());
+        return String.format("[%s - %s]: %s", user, time, rawMessage);
+    }
+
+    private void broadcastMessage(String message) {
+        synchronized (clients) {
+            for (ClientHandler client : clients) {
+                try {
+                    client.out.writeUTF(message);
+                } catch (IOException e) {
+                    System.out.println("Erreur dans l'envoi du message");
+                }
+            }
+        }
+
+    }
+
+    private void saveSentMessage(String message) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(HISTORY_TXT, true))) {
+            bw.write(message);
+            bw.newLine();
+            bw.flush();
+        } catch (IOException e) {
+            System.out.println("Error saving message: " + e.getMessage());
         }
     }
 
-    // Diffuser un message à tous les clients
-    private void broadcastMessage(String message) {
-        // Implémentez la logique pour envoyer ce message à tous les clients connectés
-        // Vous pouvez ajouter une liste statique des clients dans le serveur pour cela
+    private void displayMessageHistory() throws IOException {
+        List<String> lastMessages = new ArrayList<>();
+
+        try (BufferedReader br = new BufferedReader(new FileReader(HISTORY_TXT))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                lastMessages.add(line);
+            }
+        } catch (FileNotFoundException e) {
+            System.out.println("History file not found, starting fresh.");
+        }
+
+        int start = Math.max(0, lastMessages.size() - MAX_HISTORY_MESSAGES);
+        List<String> recentMessages = lastMessages.subList(start, lastMessages.size());
+
+        for (String message : recentMessages) {
+            out.writeUTF(message);
+        }
+    }
+    private static void saveNewUser(String username, String password) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter("accounts.txt", true))) {
+            bw.write(username + ":" + password);
+            bw.newLine();
+            bw.flush();
+        } catch (IOException e) {
+            System.out.println("Erreur lors de l'enregistrement du nouvel utilisateur: " + e.getMessage());
+        }
+    }
+
+    private synchronized void addClient(ClientHandler client) {
+        clients.add(client);
+    }
+
+    private synchronized void removeClient(ClientHandler client) {
+        clients.remove(client);
     }
 }

@@ -1,86 +1,132 @@
 import java.io.*;
-import java.net.*;
+import java.net.Socket;
 import java.util.Scanner;
 
+// Application client
 public class Client {
     private static Socket socket;
     static String ipAddress;
-    static int port = 5020;
+    static int port;
     static Scanner scanner = new Scanner(System.in);
     static DataInputStream in;
     static DataOutputStream out;
 
+
     public static void main(String[] args) throws Exception {
         try {
-            // Demande à l'utilisateur l'adresse IP du serveur et le port
             ipAddress = configureIpAddress();
-            socket = new Socket(ipAddress, port);  // Connexion au serveur
-            System.out.println("Connecté au serveur à " + ipAddress + ":" + port);
+            port = configurePort();
+            socket = new Socket(ipAddress, port);
+            System.out.format("Connecté au serveur [%s:%d]%n", ipAddress, port);
 
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
 
-            // Appeler la méthode d'authentification
-            authenticate();
+            System.out.print(in.readUTF());
+            String username = scanner.nextLine();
+            out.writeUTF(username);
 
-            // Lancer le thread pour recevoir les messages
+            System.out.print(in.readUTF());
+            String password = scanner.nextLine();
+            out.writeUTF(password);
+
+            String response = in.readUTF();
+            System.out.println(response);
+            if (!response.toLowerCase().contains("authentification réussie")) {
+                System.out.println("Connexion refusée.");
+                socket.close();
+                scanner.close();
+                return;
+            }
+
+
             new Thread(() -> {
                 try {
                     String receivedMessage;
-                    while ((receivedMessage = in.readUTF()) != null) {
-                        System.out.println(receivedMessage);  // Affiche les messages reçus
+                    while (true) {
+                        try {
+                            receivedMessage = in.readUTF();
+                            System.out.println(receivedMessage);
+                        } catch (IOException e) {
+                            System.out.println("Server connection lost.");
+                            break;
+                        }
                     }
-                } catch (IOException e) {
-                    System.out.println("Erreur de connexion au serveur.");
+                } catch (Exception e) {
+                    System.out.println("Server connection lost.");
                 }
             }).start();
 
-            // Méthode pour envoyer des messages après authentification
             sendMessage();
-        } catch (IOException e) {
+        }
+        catch (Exception e) {
             e.printStackTrace();
-        } finally {
-            socket.close();
-            scanner.close();
+        }
+        finally {
+            try {
+                socket.close();
+                scanner.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
-    // Méthode pour envoyer un message au serveur
     private static void sendMessage() throws IOException {
         while (true) {
             String newMessage = scanner.nextLine().trim();
+
             if (newMessage.isEmpty()) {
                 continue;
             }
-            out.writeUTF(newMessage);  // Envoie le message au serveur
+            if (newMessage.length() > 200) {
+                System.out.println("Le message est trop long, veuillez respecter la limite de 200 caractères.");
+                continue;
+            }
+            out.writeUTF(newMessage);
         }
     }
 
-    // Méthode pour configurer l'adresse IP du serveur
     private static String configureIpAddress() {
-        System.out.println("Entrez l'adresse IP du serveur : ");
+        System.out.println("Veuillez entrer une adresse IP valide (exemple du format requis : 192.168.1.1) : ");
         ipAddress = scanner.nextLine();
+        while (!verifyIpAddress(ipAddress)) {
+            System.out.println("L'adresse IP entrée n'est pas valide, veuillez réessayer (exemple du format requis : 192.168.1.1) : ");
+            ipAddress = scanner.nextLine();
+        };
         return ipAddress;
     }
 
-    // Méthode pour authentifier l'utilisateur
-    private static void authenticate() throws IOException {
-        // Demander le nom d'utilisateur
-        System.out.print(in.readUTF());  // Message du serveur pour le nom d'utilisateur
-        String username = scanner.nextLine();
-        out.writeUTF(username);  // Envoyer le nom d'utilisateur au serveur
+    private static boolean verifyIpAddress (String ipAddress){
+            if (ipAddress.isEmpty()) return false;
 
-        // Demander le mot de passe
-        System.out.print(in.readUTF());  // Message du serveur pour le mot de passe
-        String password = scanner.nextLine();
-        out.writeUTF(password);  // Envoyer le mot de passe au serveur
+            String[] parts = ipAddress.split("\\.");
+            if (parts.length != 4) return false;
 
-        // Attendre la réponse du serveur
-        String response = in.readUTF();
-        System.out.println(response);
-        if (response.contains("échec")) {
-            System.out.println("Connexion fermée.");
-            System.exit(0);  // Fermer la connexion si l'authentification échoue
+            try {
+                for (String part : parts) {
+                    int i = Integer.parseInt(part);
+                    if ((i < 0) || (i > 255)) return false;
+                }
+            } catch (Exception e) {
+                return !ipAddress.endsWith(".");
+            }
+
+            return true;
         }
+
+    private static int configurePort() {
+        System.out.println("Veuillez entrer un port d'écoute compris entre 5000 et 5050 : ");
+        port = scanner.nextInt();
+        while (!verifyPort(port)) {
+            System.out.println("Le port entré n'est pas valide, veuillez réessayer (entre 5000 et 5050) : ");
+            port = scanner.nextInt();
+        };
+        scanner.nextLine();
+        return port;
     }
+
+    private static boolean verifyPort ( int port){
+            return port >= 5000 && port <= 5050;
+        }
 }
