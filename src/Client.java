@@ -8,8 +8,8 @@ public class Client {
     static String ipAddress;
     static int port;
     static Scanner scanner = new Scanner(System.in);
-    static BufferedReader in;
-    static PrintWriter out;
+    static DataInputStream in;
+    static DataOutputStream out;
 
 
     public static void main(String[] args) throws Exception {
@@ -19,17 +19,26 @@ public class Client {
             socket = new Socket(ipAddress, port);
             System.out.format("Connecté au serveur [%s:%d]%n", ipAddress, port);
 
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new PrintWriter(socket.getOutputStream(), true);
+            in = new DataInputStream(socket.getInputStream());
+            out = new DataOutputStream(socket.getOutputStream());
 
-//            System.out.print(in.readUTF());
-//            String username = scanner.nextLine();
-//            out.writeUTF(username);
-//
-//            System.out.print(in.readUTF());
-//            String password = scanner.nextLine();
-//            out.writeUTF(password);
-//
+            System.out.print(in.readUTF());
+            String username = scanner.nextLine();
+            out.writeUTF(username);
+
+            System.out.print(in.readUTF());
+            String password = scanner.nextLine();
+            out.writeUTF(password);
+
+            String response = in.readUTF();
+            System.out.println(response);
+            if (!response.contains("authentification réussie")) {
+                System.out.println("Connexion refusée.");
+                socket.close();
+                scanner.close();
+                return;
+            }
+
 //            System.out.println(in.readUTF());
 //            String helloMessageFromServer = in.readUTF();
 //            System.out.println(helloMessageFromServer);
@@ -37,25 +46,28 @@ public class Client {
 
             new Thread(() -> {
                 try {
-                    String receivedMessageFromServer;
-                    while ((receivedMessageFromServer = in.readLine()) != null) {
-                        System.out.println(receivedMessageFromServer);
+                    String receivedMessage;
+                    while ((receivedMessage = in.readUTF()) != null) {
+                        System.out.println(receivedMessage);
                     }
                 } catch (IOException e) {
                     System.out.println("Server connection lost.");
                 }
             }).start();
-            sendMessage();
 
+            sendMessage();
         }
         catch (Exception e) {
             e.printStackTrace();
         }
         finally {
-            socket.close();
-            scanner.close();
+            try {
+                socket.close();
+                scanner.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
-
     }
 
     private static void sendMessage() throws IOException {
@@ -69,7 +81,7 @@ public class Client {
                 System.out.println("Le message est trop long, veuillez respecter la limite de 200 caractères.");
                 continue;
             }
-            out.println(newMessage);
+            out.writeUTF(newMessage);
         }
     }
 
@@ -108,6 +120,7 @@ public class Client {
             System.out.println("Le port entré n'est pas valide, veuillez réessayer (entre 5000 et 5050) : ");
             port = scanner.nextInt();
         };
+        scanner.nextLine();
         return port;
     }
 
