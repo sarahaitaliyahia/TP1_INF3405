@@ -38,14 +38,15 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
     public ClientHandler(Socket socket, int clientNumber) {
         this.socket = socket;
         this.clientNumber = clientNumber;
+        addClient(this);
+
         System.out.println("New connection with client #" + clientNumber + " at " + socket);
     }
 
-    public void run() { //Création de thread qui envoi un message à un client
+    public void run() {
         try {
             in = new DataInputStream(socket.getInputStream());
-            out = new DataOutputStream(socket.getOutputStream()); //création de canal d’envoi
-            clients.add(this);
+            out = new DataOutputStream(socket.getOutputStream());
 
             out.writeUTF("Veuillez entrer votre nom d'utilisateur :");
             String username = in.readUTF().trim();
@@ -79,19 +80,18 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
                 }
             }
 
-
             this.displayMessageHistory();
 
             String message;
             while ((message = in.readUTF()) != null) {
                 String formattedMessage = this.formatMessage(message);
-                this.saveSentMessage(formattedMessage);
+              //  this.saveSentMessage(formattedMessage);
                 this.broadcastMessage(formattedMessage);
             }
     } catch(IOException e) {
         System.out.println("Erreur lors de la gestion du client #" + clientNumber + " : " + e);
     } finally {
-        clients.remove(this);
+        removeClient(this);
         try {
             socket.close();
         } catch (IOException e) {
@@ -112,13 +112,16 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
     }
 
     private void broadcastMessage(String message) {
-        for (ClientHandler client : clients) {
-            try {
-                client.out.writeUTF(message);
-            } catch (IOException e) {
-                System.out.println("Erreur dans l'envoi du message");
+        synchronized (clients) {
+            for (ClientHandler client : clients) {
+                try {
+                    client.out.writeUTF(message);
+                } catch (IOException e) {
+                    System.out.println("Erreur dans l'envoi du message");
+                }
             }
         }
+
     }
 
     private void saveSentMessage(String message) {
@@ -160,4 +163,11 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
         }
     }
 
+    private synchronized void addClient(ClientHandler client) {
+        clients.add(client);
+    }
+
+    private synchronized void removeClient(ClientHandler client) {
+        clients.remove(client);
+    }
 }

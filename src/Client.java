@@ -8,12 +8,11 @@ public class Client {
     static String ipAddress;
     static int port;
     static Scanner scanner = new Scanner(System.in);
-
+    static DataInputStream in;
+    static DataOutputStream out;
 
 
     public static void main(String[] args) throws Exception {
-        DataInputStream in;
-        DataOutputStream out;
         try {
             ipAddress = configureIpAddress();
             port = configurePort();
@@ -52,7 +51,7 @@ public class Client {
                 }
             }).start();
 
-            sendMessage(out);
+            sendMessage();
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -67,7 +66,7 @@ public class Client {
         }
     }
 
-    private static void sendMessage(DataOutputStream out) throws IOException {
+    private static void sendMessage() throws IOException {
         while (true) {
             String newMessage = scanner.nextLine().trim();
 
