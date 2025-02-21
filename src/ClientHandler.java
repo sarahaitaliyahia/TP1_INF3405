@@ -9,8 +9,8 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
     private static String HISTORY_TXT = "history.txt";
     private Socket socket;
     private int clientNumber;
-    static DataInputStream in;
-    static DataOutputStream out;
+    static BufferedReader in;
+    static PrintWriter out;
     private static final List<ClientHandler> clients = new ArrayList<>();
     private static final HashMap<String, String> users = new HashMap<>();
 
@@ -43,47 +43,47 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
 
     public void run() { //Création de thread qui envoi un message à un client
         try {
-            in = new DataInputStream(socket.getInputStream());
-            out = new DataOutputStream(socket.getOutputStream()); //création de canal d’envoi
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            out = new PrintWriter(socket.getOutputStream(), true);
             clients.add(this);
 
-            out.writeUTF("Veuillez entrer votre nom d'utilisateur :");
-            String username = in.readUTF().trim();
+//            out.writeUTF("Veuillez entrer votre nom d'utilisateur :");
+//            String username = in.readUTF().trim();
+//
+//            out.writeUTF("Veuillez entrer votre mot de passe :");
+//            String password = in.readUTF().trim();
+//
+//            if (username.isEmpty() || password.isEmpty()) {
+//                out.writeUTF("Nom d'utilisateur et mot de passe ne doivent pas être vides.");
+//                socket.close();
+//                return;
+//            }
 
-            out.writeUTF("Veuillez entrer votre mot de passe :");
-            String password = in.readUTF().trim();
-
-            if (username.isEmpty() || password.isEmpty()) {
-                out.writeUTF("Nom d'utilisateur et mot de passe ne doivent pas être vides.");
-                socket.close();
-                return;
-            }
-
-            synchronized (users) { // Ensure thread safety
-                if (users.containsKey(username)) {
-                    if (!users.get(username).equals(password)) {
-                        out.writeUTF("Erreur dans la saisie du mot de passe.");
-                        System.out.println("Client#" + clientNumber + " a échoué l'authentification.");
-                        socket.close();
-                        return;
-                    } else {
-                        out.writeUTF("Authentification réussie. Bienvenue, " + username + "!");
-                        System.out.println("Client#" + clientNumber + " authentifié en tant que " + username);
-                    }
-                } else {
-                    // **New Account Creation + Save to File**
-                    users.put(username, password);
-                    saveNewUser(username, password); // Save to accounts.txt
-                    out.writeUTF("Compte créé et authentification réussie. Bienvenue, " + username + "!");
-                    System.out.println("Nouveau compte créé pour " + username + " par client#" + clientNumber);
-                }
-            }
-
+//            synchronized (users) { // Ensure thread safety
+//                if (users.containsKey(username)) {
+//                    if (!users.get(username).equals(password)) {
+//                        out.writeUTF("Erreur dans la saisie du mot de passe.");
+//                        System.out.println("Client#" + clientNumber + " a échoué l'authentification.");
+//                        socket.close();
+//                        return;
+//                    } else {
+//                        out.writeUTF("Authentification réussie. Bienvenue, " + username + "!");
+//                        System.out.println("Client#" + clientNumber + " authentifié en tant que " + username);
+//                    }
+//                } else {
+//                    // **New Account Creation + Save to File**
+//                    users.put(username, password);
+//                    saveNewUser(username, password); // Save to accounts.txt
+//                    out.writeUTF("Compte créé et authentification réussie. Bienvenue, " + username + "!");
+//                    System.out.println("Nouveau compte créé pour " + username + " par client#" + clientNumber);
+//                }
+//            }
+//
 
             this.displayMessageHistory();
 
             String message;
-            while ((message = in.readUTF()) != null) {
+            while ((message = in.readLine()) != null) {
                 String formattedMessage = this.formatMessage(message);
                 this.saveSentMessage(formattedMessage);
                 this.broadcastMessage(formattedMessage);
@@ -113,11 +113,7 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
 
     private void broadcastMessage(String message) {
         for (ClientHandler client : clients) {
-            try {
-                client.out.writeUTF(message);
-            } catch (IOException e) {
-                System.out.println("Erreur dans l'envoi du message");
-            }
+            client.out.println(message);
         }
 
     }
@@ -148,7 +144,7 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
         List<String> recentMessages = lastMessages.subList(start, lastMessages.size());
 
         for (String message : recentMessages) {
-            out.writeUTF(message);
+            out.println(message);
         }
     }
     private static void saveNewUser(String username, String password) {
