@@ -9,8 +9,8 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
     private static String HISTORY_TXT = "history.txt";
     private Socket socket;
     private int clientNumber;
-    static DataInputStream in;
-    static DataOutputStream out;
+     DataInputStream in;
+     DataOutputStream out;
     private static final List<ClientHandler> clients = new ArrayList<>();
     private static final HashMap<String, String> users = new HashMap<>();
 
@@ -119,7 +119,6 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
                 System.out.println("Erreur dans l'envoi du message");
             }
         }
-
     }
 
     private void saveSentMessage(String message) {
