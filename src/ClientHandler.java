@@ -85,7 +85,7 @@ public class ClientHandler extends Thread { //pour traiter la demande de chaque 
             String message;
             while ((message = in.readUTF()) != null) {
                 String formattedMessage = this.formatMessage(message);
-              //  this.saveSentMessage(formattedMessage);
+                this.saveSentMessage(formattedMessage);
                 this.broadcastMessage(formattedMessage);
             }
     } catch(IOException e) {

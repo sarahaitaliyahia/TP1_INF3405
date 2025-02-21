@@ -43,10 +43,16 @@ public class Client {
             new Thread(() -> {
                 try {
                     String receivedMessage;
-                    while ((receivedMessage = in.readUTF()) != null) {
-                        System.out.println(receivedMessage);
+                    while (true) {
+                        try {
+                            receivedMessage = in.readUTF();
+                            System.out.println(receivedMessage);
+                        } catch (IOException e) {
+                            System.out.println("Server connection lost.");
+                            break;
+                        }
                     }
-                } catch (IOException e) {
+                } catch (Exception e) {
                     System.out.println("Server connection lost.");
                 }
             }).start();
