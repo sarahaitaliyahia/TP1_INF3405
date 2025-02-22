@@ -1,3 +1,0 @@
-allo:non
-utilisateur1:allo1234
-oui:non
