@@ -1,19 +1,18 @@
-import java.util.*;
 import java.net.*;
-import java.io.*;
 
 public class Serveur {
-
     public static void main(String[] args) throws Exception {
-        String ipAddress = NetworkValidation.configureIpAddress();
-        int port = NetworkValidation.configurePort();
+        System.out.println("************* Bienvenue dans le système de clavardage *************");
+        String serverIpAddress = NetworkValidation.configureIpAddress();
+        int serverPort = NetworkValidation.configurePort();
 
         ServerSocket listener = new ServerSocket();
         listener.setReuseAddress(true);
 
-        InetAddress serverIP = InetAddress.getByName(ipAddress);
-        listener.bind(new InetSocketAddress(serverIP, port));
-        System.out.format("Le serveur fonctionne sur %s:%d%n", ipAddress, port);
+        InetAddress serverIP = InetAddress.getByName(serverIpAddress);
+        listener.bind(new InetSocketAddress(serverIP, serverPort));
+        System.out.format("************* Connexion du serveur réussie, le serveur fonctionne sur : [%s:%d] *************%n",
+                serverIpAddress, serverPort);
 
         try {
             while (true) {
